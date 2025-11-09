@@ -4,12 +4,16 @@ import { CreateCoffeeDto } from './dto/create-coffee.dto';
 import { UpdateCoffeeDto } from './dto/update-coffee.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { Flavor } from './entities/flavor.entity';
 
 @Injectable()
 export class CoffeesService {
 
-  constructor(@InjectRepository(Coffee)
-  private readonly coffeeRepository: Repository<Coffee>
+  constructor(
+    @InjectRepository(Coffee)
+    private readonly coffeeRepository: Repository<Coffee>,
+    @InjectRepository(Flavor)
+    private readonly flavorRepository: Repository<Flavor>
   ) { }
 
   async findAll() {
@@ -33,20 +37,24 @@ export class CoffeesService {
   }
 
   async create(newCoffeeDto: CreateCoffeeDto) {
-    const coffee = this.coffeeRepository.create(newCoffeeDto)
+    const flavors = await Promise.all(newCoffeeDto.flavors.map(name => this.preloadFlavorByName(name)))
+    const coffee = this.coffeeRepository.create({ ...newCoffeeDto, flavors })
     const savedCoffee = await this.coffeeRepository.save(coffee)
-    return coffee
+    return savedCoffee
   }
 
   async update(id: string, updateCoffeeDto: UpdateCoffeeDto) {
+    const flavors = updateCoffeeDto.flavors &&
+      (await Promise.all(updateCoffeeDto.flavors.map(name => this.preloadFlavorByName(name))))
+
     const existingCoffee = await this.coffeeRepository.preload({
       id: +id,
-      ...updateCoffeeDto
+      ...updateCoffeeDto, flavors
     })
 
     if (!existingCoffee) throw new NotFoundException(`Coffee ${id} not found.`)
 
-    const updatedCoffee = await this.coffeeRepository.update(id, updateCoffeeDto)
+    const updatedCoffee = await this.coffeeRepository.update(id, existingCoffee)
 
     return updatedCoffee
   }
@@ -60,4 +68,18 @@ export class CoffeesService {
 
     return deleted
   }
+
+  private async preloadFlavorByName(name: string): Promise<Flavor> {
+    const existingFlavor = await this.flavorRepository.findOne({
+      where: { name }
+    })
+
+    // Return the flavor if already exists 
+    if (existingFlavor) return existingFlavor
+    //If it does not exist, create a new flavor
+    const newFlavor = this.flavorRepository.create({ name })
+
+    return this.flavorRepository.save(newFlavor)
+  }
+
 }
