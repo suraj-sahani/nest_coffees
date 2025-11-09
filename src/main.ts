@@ -8,6 +8,9 @@ async function bootstrap() {
     transform: true, // Transforms all payload body to the assigned types
     whitelist: true, // Removes any properties that are not in the DTO
     forbidNonWhitelisted: true, // Throws an error if non-whitelisted properties are present
+    transformOptions: {
+      enableImplicitConversion: true // Automatically converts data based on assined class
+    }
   }))
   await app.listen(process.env.PORT ?? 3000);
 }
